@@ -27,7 +27,7 @@ internal class EnvEntry
 
     public string? Documentation { get; }
 
-    public override string ToString()
+    public sealed override string ToString()
     {
         return $"{Name} / {Type} / {Value}";
     }

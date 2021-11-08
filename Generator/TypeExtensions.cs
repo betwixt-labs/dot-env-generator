@@ -5,10 +5,17 @@ namespace DotEnvGenerator;
 internal static class TypeExtensions
 {
     /// <summary>
-    ///     Determines if a type is numeric.  Nullable numeric types are considered numeric.
+    /// Determines if a type can be use with the `const` keyword.
+    /// </summary>
+    /// <param name="type"></param>
+    /// <returns></returns>
+    public static bool CanBeConsts(this Type type) => type.IsNumericType() || type == typeof(string) || type == typeof(bool);
+
+    /// <summary>
+    ///     Determines if a type is numeric. 
     /// </summary>
     /// <remarks>
-    ///     Boolean is not considered numeric.
+    ///     Boolean is not considered numeric. Nullable numeric types are considered numeric.
     /// </remarks>
     public static bool IsNumericType(this Type? type)
     {

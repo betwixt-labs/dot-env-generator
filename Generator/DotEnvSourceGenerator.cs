@@ -16,12 +16,9 @@ public class DotEnvSourceGenerator : ISourceGenerator
             return;
         }
 
-        var optimizationLevel = context.Compilation.Options.OptimizationLevel;
         var entries = ParseEnvFile(context, envFile);
 
-
         var className = $"{Path.GetFileNameWithoutExtension(envFile.Path).ToPascalCase()}Environment";
-
 
         var builder = new StringBuilder();
 
@@ -51,7 +48,7 @@ public class DotEnvSourceGenerator : ISourceGenerator
 
             if (!entry.Type.IsArray)
             {
-                if (entry.Type.IsNumericType() || entry.Type == typeof(string) || entry.Type == typeof(bool))
+                if (entry.Type.CanBeConsts())
                 {
                     builder.AppendLine($"       public const {entry.Type} {entry.Name.ToPascalCase()} = {value};");
                 }
@@ -65,12 +62,11 @@ public class DotEnvSourceGenerator : ISourceGenerator
                 // https://vcsjones.dev/csharp-readonly-span-bytes-static/
                 builder.AppendLine(entry.Type == typeof(byte[])
                     ? $"       public static ReadOnlySpan<byte> {entry.Name.ToPascalCase()} => {value};"
-                    : $"       public static readonly {entry.Type.GetElementType()}[] {entry.Name.ToPascalCase()} = {value};");
+                    : $"       public static readonly IReadOnlyList<{entry.Type.GetElementType()}> {entry.Name.ToPascalCase()} = {value};");
             }
         }
         builder.AppendLine("    }");
         builder.AppendLine("}");
-
 
         context.AddSource("dotenv", SourceText.From(builder.ToString(), Encoding.UTF8));
     }
@@ -79,6 +75,8 @@ public class DotEnvSourceGenerator : ISourceGenerator
     public void Initialize(GeneratorInitializationContext context)
     {
     }
+
+    #region Formatters 
 
     private static string FormatValue(EnvEntry entry) => entry switch
     {
@@ -147,32 +145,16 @@ public class DotEnvSourceGenerator : ISourceGenerator
         return value;
     }
 
-    /// <summary>
-    ///     Searches for an environment variable checking all available stores.
-    /// </summary>
-    private static string GetEnvironmentVariable(string name, string defaultValue)
-    {
-        var value = Environment.GetEnvironmentVariable(name, EnvironmentVariableTarget.Machine);
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            value = Environment.GetEnvironmentVariable(name, EnvironmentVariableTarget.User);
-        }
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            value = Environment.GetEnvironmentVariable(name, EnvironmentVariableTarget.Process);
-        }
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            value = defaultValue;
-        }
-        return value;
-    }
+
 
     /// <summary>
     ///     Converts an environment variable to a string literal.
     /// </summary>
     private static string ValueToLiteral(EnvEntry entry) => entry.Value.QuoteString();
 
+    #endregion
+
+    #region Parser
     private static List<EnvEntry> ParseEnvFile(GeneratorExecutionContext context, AdditionalText envFile)
     {
         var entries = new List<EnvEntry>();
@@ -198,47 +180,69 @@ public class DotEnvSourceGenerator : ISourceGenerator
                 }
                 continue;
             }
-            if (!line.Contains('='))
+            try
+            {
+                if (!line.Contains('='))
+                {
+                    continue;
+                }
+
+                var parts = line.Split(new[] { '=' }, 2);
+                if (parts.Length < 2)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(SyntaxError, Location.None, envFile.Path));
+                    continue;
+                }
+
+                var name = parts[0].Trim();
+                if (entries.Any(e => e.Name.Equals(name, StringComparison.InvariantCultureIgnoreCase)))
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(DuplicateEnvironmentVariable, Location.None, name, envFile.Path));
+                    continue;
+                }
+                var defaultValue = parts[1].Trim();
+
+                var value = GetEnvironmentVariable(name, defaultValue);
+
+                if (string.IsNullOrWhiteSpace(value))
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(EnvironmentVariableNotFound, Location.None, name));
+                    continue;
+                }
+                entries.Add(new EnvEntry(name, value, documentation?.Trim()));
+
+            }
+            finally
             {
                 documentation = null;
-                continue;
             }
-
-            var parts = line.Split(new[] { '=' }, 2);
-
-
-            if (parts.Length < 2)
-            {
-                documentation = null;
-                context.ReportDiagnostic(Diagnostic.Create(SyntaxError, Location.None, envFile.Path));
-                continue;
-            }
-
-            var name = parts[0];
-            if (entries.Any(e => e.Name.Equals(name, StringComparison.InvariantCultureIgnoreCase)))
-            {
-                documentation = null;
-                context.ReportDiagnostic(Diagnostic.Create(DuplicateEnvironmentVariable, Location.None, name, envFile.Path));
-                continue;
-            }
-            var defaultValue = parts[1];
-
-            var value = GetEnvironmentVariable(name, defaultValue);
-
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                documentation = null;
-                context.ReportDiagnostic(Diagnostic.Create(EnvironmentVariableNotFound, Location.None, name));
-                continue;
-            }
-            entries.Add(new EnvEntry(name, value, documentation));
-            documentation = null;
         }
         return entries;
     }
 
+    /// <summary>
+    ///     Searches for an environment variable checking all available stores.
+    /// </summary>
+    private static string GetEnvironmentVariable(string name, string defaultValue)
+    {
+        var value = Environment.GetEnvironmentVariable(name, EnvironmentVariableTarget.Machine);
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            value = Environment.GetEnvironmentVariable(name, EnvironmentVariableTarget.User);
+        }
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            value = Environment.GetEnvironmentVariable(name, EnvironmentVariableTarget.Process);
+        }
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            value = defaultValue;
+        }
+        return value;
+    }
 
-#region Errors
+    #endregion
+    #region Errors
 
     private static readonly DiagnosticDescriptor NoDotEnv = new("DOTENVGEN001",
         "No .env file found",
@@ -276,5 +280,5 @@ public class DotEnvSourceGenerator : ISourceGenerator
         DiagnosticSeverity.Error,
         true);
 
-#endregion
+    #endregion
 }

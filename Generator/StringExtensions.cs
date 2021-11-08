@@ -8,8 +8,10 @@ namespace DotEnvGenerator
         private const char SnakeSeparator = '_';
         private const char KebabSeparator = '-';
 
+        private const string LiteralPattern = "^(?<prefix>[+-]?)(?<number>[0-9]+(?:_[0-9]+|[.][0-9]{1,3})*)(?<suffix>ul|lu|u|l|f|d|m?)$";
+        private static readonly Regex LiteralRegex = new Regex(LiteralPattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
-        private static readonly List<Type> ExpectedTypes = new() { typeof(bool), typeof(int), typeof(long), typeof(double), typeof(DateTime), typeof(Guid), typeof(Version) };
+        private static readonly List<Type> KnownTypes = new() { typeof(bool), typeof(DateTime), typeof(Guid) };
 
         /// <summary>
         ///     Determines if the specified char array contains only uppercase characters.
@@ -36,10 +38,6 @@ namespace DotEnvGenerator
         {
             if (string.IsNullOrEmpty(value) || value.Length % 4 != 0
                 || value.Contains(' ') || value.Contains('\t') || value.Contains('\r') || value.Contains('\n'))
-            {
-                return false;
-            }
-            if (!value.EndsWith("="))
             {
                 return false;
             }
@@ -147,7 +145,66 @@ namespace DotEnvGenerator
         {
             return value.Select(b => $"0x{b:X2}").Aggregate((f, s) => $"{f}, {s}");
         }
+        /// <summary>
+        /// Tries to parse a number from its string representation.
+        /// </summary>
+        /// <param name="value">The string which may contain a number value.</param>
+        private static Type? TryGetNumberType(string value)
+        {
+            if (value.IsQuoted())
+            {
+                return null;
+            }
+            static bool IsExponentialFormat(string str) => (str.Contains("E") || str.Contains("e")) && double.TryParse(str, out double _);
+            if (IsExponentialFormat(value))
+            {
+                return typeof(double);
+            }
 
+            var match = LiteralRegex.Match(value);
+            if (match.Groups.Count <= 0)
+            {
+                return null;
+            }
+            bool isNegative = false;
+
+            if (string.Equals(match.Groups["prefix"].ToString(), "-", StringComparison.OrdinalIgnoreCase))
+            {
+                isNegative = true;
+            }
+
+            var suffix = match.Groups["suffix"].ToString();
+            var number = match.Groups["number"].ToString().Replace("_", string.Empty);
+            if (!string.IsNullOrWhiteSpace(suffix))
+            {
+                number = number.Replace(suffix, string.Empty);
+            }
+            if (string.IsNullOrWhiteSpace(number))
+            {
+                return null;
+            }
+            return (match.Groups["suffix"].ToString().ToUpper()) switch
+            {
+                "L" when long.TryParse(number, out _) => typeof(long),
+                "UL" or "LU" when !isNegative && ulong.TryParse(number, out _) => typeof(ulong),
+                "U" when !isNegative && uint.TryParse(number, out _) => typeof(uint),
+                "D" when double.TryParse(number, out _) => typeof(double),
+                "F" when float.TryParse(number, out _) => typeof(float),
+                "M" when double.TryParse(number, out _) => typeof(decimal),
+                _ when number.Contains('.') && double.TryParse(number, out _) => typeof(double),
+                _ when number.Contains('.') && float.TryParse(number, out _) => typeof(float),
+                _ when number.Contains('.') && decimal.TryParse(number, out _) => typeof(decimal),
+                _ when int.TryParse(number, out _) => typeof(int),
+                _ when long.TryParse(number, out _) => typeof(long),
+                _ => null
+
+            };
+        }
+
+        /// <summary>
+        /// Determines if a string is surrounded in quotes.
+        /// </summary>
+        private static bool IsQuoted(this string value) => value.StartsWith("\"") && value.EndsWith("\"");
 
         /// <summary>
         ///     Detects what the CLR type of the specified <paramref name="value"/> is.
@@ -157,16 +214,23 @@ namespace DotEnvGenerator
         /// <exception cref="TypeAccessException">When there are issues with the type.</exception>
         public static Type DetectType(this string value)
         {
-            foreach (var type in ExpectedTypes)
+            // try and parse a string to a number.
+            // this allows to support integer literals
+            var numberType = TryGetNumberType(value);
+            if (numberType is not null)
+            {
+                return numberType;
+            }
+            // try and convert the string to a known type.
+            foreach (var type in KnownTypes)
             {
                 var converter = TypeDescriptor.GetConverter(type);
                 if (converter.CanConvertFrom(typeof(string)))
                 {
                     try
                     {
-                        // You'll have to think about localization here
                         var newValue = converter.ConvertFromInvariantString(value);
-                        if (newValue != null)
+                        if (newValue is not null)
                         {
                             return type;
                         }
@@ -178,7 +242,7 @@ namespace DotEnvGenerator
                 }
             }
             // try and parse an array
-            if (!value.StartsWith("\"") && !value.EndsWith("\"") && value.Contains(','))
+            if (!value.IsQuoted() && value.Contains(','))
             {
                 var detectedTypes = value.CommaSplit().Select(v => v.Trim().DetectType()).ToArray();
                 var type = detectedTypes.FirstOrDefault();
@@ -186,6 +250,7 @@ namespace DotEnvGenerator
                 {
                     throw new TypeAccessException($"No type could be determined for array value '{value}'");
                 }
+                // if for some reason the array has multiple types treat all values as strings
                 if (!detectedTypes.AreAllSame())
                 {
                     return typeof(string[]);
@@ -195,7 +260,7 @@ namespace DotEnvGenerator
                 return arrayType ?? throw new TypeAccessException($"Unable to form type from: {typeString}");
             }
 
-            if (value.IsBase64String())
+            if (!value.IsQuoted() && value.IsBase64String())
             {
                 return typeof(byte[]);
             }
@@ -213,12 +278,11 @@ namespace DotEnvGenerator
             {
                 value = $"{value}\"";
             }
-           
             return value;
         }
         public static string[] CommaSplit(this string value)
         {
-            return Regex.Split(value, ",(?=(?:[^']*'[^']*')*[^']*$)");
+            return Regex.Split(value, ",(?=(?:[^']*'[^']*')*[^']*$)", RegexOptions.Compiled);
         }
 
         /// <summary>
