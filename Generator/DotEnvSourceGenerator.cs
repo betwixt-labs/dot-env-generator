@@ -90,22 +90,24 @@ public class DotEnvSourceGenerator : ISourceGenerator
 
     private static string ValueToDateTime(EnvEntry entry)
     {
+        const string defaultType = "DateTime.MinValue";
         var value = entry.Value;
-        if (string.IsNullOrWhiteSpace(value))
+        if (DateTime.TryParse(value, out _))
         {
-            return "DateTime.MinValue";
+            return $"DateTime.Parse(\"{value}\")";
         }
-        return $"DateTime.Parse(\"{value}\")";
+        return defaultType;
     }
 
     private static string ValueToGuid(EnvEntry entry)
     {
+        const string defaultType = "Guid.Empty";
         var value = entry.Value;
-        if (string.IsNullOrWhiteSpace(value))
+        if (Guid.TryParse(value, out _))
         {
-            return "Guid.Empty";
+            return $"Guid.Parse(\"{value}\")";
         }
-        return $"Guid.Parse(\"{value}\")";
+        return defaultType;
     }
 
     /// <summary>
