@@ -37,9 +37,47 @@ A_ULONG=2000UL
 A_NEGATIVE_LONG=-2000L
 ```
 
+And the generator will turn it into this:
+
+```csharp
+using System;
+namespace DotEnv.Generated
+{
+    /// <summary>
+    /// An auto-generated class which holds constants derived from 'example.env'
+    /// </summary>
+    public static class ExampleEnvironment
+    {
+       /// <summary> A string literal </summary>
+       public const System.String AString = "yep, that is a string.";
+       /// <summary> A string </summary>
+       public const System.String AlsoString = "RANDOM_0026256698";
+       /// <summary> An array of string </summary>
+       public static readonly IReadOnlyList<System.String> StringArray = new string[] { "one", "two", "three", "four", "five" };
+       /// <summary> An array of numbers </summary>
+       public static readonly IReadOnlyList<System.Int32> IntArray = new System.Int32[] { 1, 2, 3, 4, 5, 6, 7 };
+       public const System.Int32 ANumber = 1000;
+       public const System.Int32 ABiggerNumber = 10_000_000;
+       public static readonly System.Guid AGuid = Guid.Parse("de095b54-2082-40f8-a928-794da5675e7c");
+       public static readonly System.DateTime ADateTime = DateTime.Parse("Tue, 1 Jan 2008 00:00:00Z");
+       /// <summary> A base64 encoded bytearray </summary>
+       public static ReadOnlySpan<byte> AByteArray => new byte[] { 0x77, 0x68, 0x61, 0x74 };
+       public const System.Double ADouble = 1.0;
+       public const System.Double AScienceDouble = 3.2e23;
+       public const System.Double ADoubleLiteral = 1.0D;
+       public const System.Int32 AHex = 0xFF0000;
+       public const System.UInt32 AUint = 2000U;
+       public const System.Int64 ALong = 2000L;
+       public const System.UInt64 AUlong = 2000UL;
+       public const System.Int64 ANegativeLong = -2000L;
+    }
+}
+```
+
 The source generator will use your .env file first as a lookup table. Using the left-hand declarations the generator will check for an environment variable with that name in descending order (machine, user, and finally the process.) 
 
 If the variable does not exist in any of these stores, the value on the right is used. If not default value is defined, an error is reported.
+
 
 The value parsing rules are simple:
 - Anything wrapped in double quotes is treated as a string.
