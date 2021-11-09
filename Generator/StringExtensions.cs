@@ -8,8 +8,9 @@ namespace DotEnvGenerator
         private const char SnakeSeparator = '_';
         private const char KebabSeparator = '-';
 
-        private const string LiteralPattern = "^(?<prefix>[+-]?)(?<number>[0-9]+(?:_[0-9]+|[.][0-9]{1,3})*)(?<suffix>ul|lu|u|l|f|d|m?)$";
+        private const string LiteralPattern = @"^(?<prefix>[+-]?)(?<number>(?:0[xX])?[[0-9a-fA-F]+(?:_[0-9]+|[.][0-9]{1,3})*)(?<suffix>ul|lu|u|l|f|d|m?)$";
         private static readonly Regex LiteralRegex = new Regex(LiteralPattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
 
         private static readonly List<Type> KnownTypes = new() { typeof(bool), typeof(DateTime), typeof(Guid) };
 
@@ -183,7 +184,7 @@ namespace DotEnvGenerator
             {
                 return null;
             }
-            return (match.Groups["suffix"].ToString().ToUpper()) switch
+            return (suffix.ToUpper()) switch
             {
                 "L" when long.TryParse(number, out _) => typeof(long),
                 "UL" or "LU" when !isNegative && ulong.TryParse(number, out _) => typeof(ulong),
@@ -191,13 +192,18 @@ namespace DotEnvGenerator
                 "D" when double.TryParse(number, out _) => typeof(double),
                 "F" when float.TryParse(number, out _) => typeof(float),
                 "M" when double.TryParse(number, out _) => typeof(decimal),
+                "U" when number.StartsWith("0x", StringComparison.InvariantCultureIgnoreCase) && !isNegative && uint.TryParse(number.Substring(2), System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out _) => typeof(uint),
+                "UL" or "LU" when number.StartsWith("0x", StringComparison.InvariantCultureIgnoreCase) && !isNegative && ulong.TryParse(number.Substring(2), System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out _) => typeof(ulong),
+                "L" when number.StartsWith("0x", StringComparison.InvariantCultureIgnoreCase) && long.TryParse(number.Substring(2), System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out _) => typeof(long),
+                _ when number.StartsWith("0x", StringComparison.InvariantCultureIgnoreCase) && int.TryParse(number.Substring(2), System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out _) => typeof(int),
                 _ when number.Contains('.') && double.TryParse(number, out _) => typeof(double),
                 _ when number.Contains('.') && float.TryParse(number, out _) => typeof(float),
                 _ when number.Contains('.') && decimal.TryParse(number, out _) => typeof(decimal),
                 _ when int.TryParse(number, out _) => typeof(int),
+                _ when uint.TryParse(number, out _) => typeof(uint),
                 _ when long.TryParse(number, out _) => typeof(long),
+                _ when ulong.TryParse(number, out _) => typeof(ulong),
                 _ => null
-
             };
         }
 

@@ -9,7 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <AdditionalFiles Include="example.env" EnableLogging="true" />
+    <AdditionalFiles Include="example.env" />
   </ItemGroup>
 
   <ItemGroup>
