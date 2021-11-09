@@ -76,7 +76,7 @@ namespace DotEnv.Generated
 
 The source generator will use your .env file first as a lookup table. Using the left-hand declarations the generator will check for an environment variable with that name in descending order (machine, user, and finally the process.) 
 
-If the variable does not exist in any of these stores, the value on the right is used. If not default value is defined, an error is reported.
+If the variable does not exist in any of these stores, the value on the right is used. If no default value is defined, an error is reported.
 
 
 The value parsing rules are simple:
