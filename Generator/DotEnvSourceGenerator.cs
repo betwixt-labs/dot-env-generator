@@ -9,66 +9,73 @@ public class DotEnvSourceGenerator : ISourceGenerator
 {
     public void Execute(GeneratorExecutionContext context)
     {
-        var envFile = context.AdditionalFiles.FirstOrDefault();
-        if (envFile is null)
+        foreach (var envFile in context.AdditionalFiles.Where(f => Path.GetExtension(f.Path).Equals(".env", StringComparison.InvariantCultureIgnoreCase)))
         {
-            context.ReportDiagnostic(Diagnostic.Create(NoDotEnv, Location.None, context.Compilation.AssemblyName));
-            return;
-        }
-
-        var entries = ParseEnvFile(context, envFile);
-
-        var className = $"{Path.GetFileNameWithoutExtension(envFile.Path).ToPascalCase()}Environment";
-
-        var builder = new StringBuilder();
-
-        builder.AppendLine("using System;");
-        builder.AppendLine("namespace DotEnv.Generated");
-        builder.AppendLine("{");
-        builder.AppendLine("    /// <summary>");
-        builder.AppendLine($"   /// An auto-generated class which holds constants derived from '{Path.GetFileName(envFile.Path)}'");
-        builder.AppendLine("    /// </summary>");
-        builder.AppendLine($"    public static class {className}");
-        builder.AppendLine("    {");
-        foreach (var entry in entries)
-        {
-            var value = FormatValue(entry);
-            if (string.IsNullOrWhiteSpace(value))
+            if (envFile is null)
             {
-                context.ReportDiagnostic(Diagnostic.Create(EnvironmentVariableNotFound, Location.None, entry.Name));
+                continue;
+            }
+            if (!File.Exists(envFile.Path))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(NoDotEnv, Location.None, context.Compilation.AssemblyName));
                 continue;
             }
 
-            if (!string.IsNullOrWhiteSpace(entry.Documentation))
-            {
-                builder.Append("       /// <summary> ");
-                builder.Append(entry.Documentation);
-                builder.Append(" </summary>").AppendLine();
-            }
+            var entries = ParseEnvFile(context, envFile);
 
-            if (!entry.Type.IsArray)
+            var className = $"{Path.GetFileNameWithoutExtension(envFile.Path).ToPascalCase()}Environment";
+
+            var builder = new StringBuilder();
+
+            builder.AppendLine("using System;");
+            builder.AppendLine("namespace DotEnv.Generated");
+            builder.AppendLine("{");
+            builder.AppendLine("    /// <summary>");
+            builder.AppendLine($"   /// An auto-generated class which holds constants derived from '{Path.GetFileName(envFile.Path)}'");
+            builder.AppendLine("    /// </summary>");
+            builder.AppendLine($"    public static class {className}");
+            builder.AppendLine("    {");
+            foreach (var entry in entries)
             {
-                if (entry.Type.CanBeConsts())
+                var value = FormatValue(entry);
+                if (string.IsNullOrWhiteSpace(value))
                 {
-                    builder.AppendLine($"       public const {entry.Type} {entry.Name.ToPascalCase()} = {value};");
+                    context.ReportDiagnostic(Diagnostic.Create(EnvironmentVariableNotFound, Location.None, entry.Name));
+                    continue;
+                }
+
+                if (!string.IsNullOrWhiteSpace(entry.Documentation))
+                {
+                    builder.Append("       /// <summary> ");
+                    builder.Append(entry.Documentation);
+                    builder.Append(" </summary>").AppendLine();
+                }
+
+                if (!entry.Type.IsArray)
+                {
+                    if (entry.Type.CanBeConsts())
+                    {
+                        builder.AppendLine($"       public const {entry.Type} {entry.Name.ToPascalCase()} = {value};");
+                    }
+                    else
+                    {
+                        builder.AppendLine($"       public static readonly {entry.Type} {entry.Name.ToPascalCase()} = {value};");
+                    }
                 }
                 else
                 {
-                    builder.AppendLine($"       public static readonly {entry.Type} {entry.Name.ToPascalCase()} = {value};");
+                    // https://vcsjones.dev/csharp-readonly-span-bytes-static/
+                    builder.AppendLine(entry.Type == typeof(byte[])
+                        ? $"       public static ReadOnlySpan<byte> {entry.Name.ToPascalCase()} => {value};"
+                        : $"       public static readonly IReadOnlyList<{entry.Type.GetElementType()}> {entry.Name.ToPascalCase()} = {value};");
                 }
             }
-            else
-            {
-                // https://vcsjones.dev/csharp-readonly-span-bytes-static/
-                builder.AppendLine(entry.Type == typeof(byte[])
-                    ? $"       public static ReadOnlySpan<byte> {entry.Name.ToPascalCase()} => {value};"
-                    : $"       public static readonly IReadOnlyList<{entry.Type.GetElementType()}> {entry.Name.ToPascalCase()} = {value};");
-            }
-        }
-        builder.AppendLine("    }");
-        builder.AppendLine("}");
+            builder.AppendLine("    }");
+            builder.AppendLine("}");
 
-        context.AddSource("dotenv", SourceText.From(builder.ToString(), Encoding.UTF8));
+            context.AddSource($"{Path.GetFileName(envFile.Path)}", SourceText.From(builder.ToString(), Encoding.UTF8));
+        }
+
     }
 
 
