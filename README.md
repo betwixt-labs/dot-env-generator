@@ -3,6 +3,17 @@ A source generator for C# that turns .env files into runtime constants.
 
 ## Basic Usage
 
+
+| NuGet            |       | [![DotEnvGenerator][1]][2]                                       |
+| :--------------- | ----: | :--------------------------------------------------------------- |
+| Package Manager  | `PM>` | `Install-Package DotEnvGenerator -Version 0.1.0`                 |
+| .NET CLI         | `>`   | `dotnet add package DotEnvGenerator --version 0.1.0`             |
+| PackageReference |       | `<PackageReference Include="DotEnvGenerator" Version="0.1.0" />` |
+| Paket CLI        | `>`   | `paket add DotEnvGenerator --version 0.1.0`                      |
+
+[1]: https://img.shields.io/nuget/v/DotEnvGenerator.svg?label=DotEnvGenerator
+[2]: https://www.nuget.org/packages/DotEnvGenerator
+
 After adding the source generator to your project add an item group to your project that references your .env file like so:
 
 ```xml
