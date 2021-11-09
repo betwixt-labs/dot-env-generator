@@ -204,7 +204,7 @@ public class DotEnvSourceGenerator : ISourceGenerator
                 }
                 var defaultValue = parts[1].Trim();
 
-                var value = GetEnvironmentVariable(name, defaultValue);
+                var value = GetEnvironmentVariable(name, defaultValue, context);
 
                 if (string.IsNullOrWhiteSpace(value))
                 {
@@ -225,7 +225,7 @@ public class DotEnvSourceGenerator : ISourceGenerator
     /// <summary>
     ///     Searches for an environment variable checking all available stores.
     /// </summary>
-    private static string GetEnvironmentVariable(string name, string defaultValue)
+    private static string GetEnvironmentVariable(string name, string defaultValue, GeneratorExecutionContext context)
     {
         var value = Environment.GetEnvironmentVariable(name, EnvironmentVariableTarget.Machine);
         if (string.IsNullOrWhiteSpace(value))
@@ -236,9 +236,10 @@ public class DotEnvSourceGenerator : ISourceGenerator
         {
             value = Environment.GetEnvironmentVariable(name, EnvironmentVariableTarget.Process);
         }
-        if (string.IsNullOrWhiteSpace(value))
+        if (string.IsNullOrWhiteSpace(value) && !string.IsNullOrWhiteSpace(defaultValue))
         {
             value = defaultValue;
+            context.ReportDiagnostic(Diagnostic.Create(DefaultEnvironmentVariable, Location.None, name));
         }
         return value;
     }
