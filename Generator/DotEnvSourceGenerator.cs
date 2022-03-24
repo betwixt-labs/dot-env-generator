@@ -31,7 +31,7 @@ public class DotEnvSourceGenerator : ISourceGenerator
             builder.AppendLine("namespace DotEnv.Generated");
             builder.AppendLine("{");
             builder.AppendLine("    /// <summary>");
-            builder.AppendLine($"   /// An auto-generated class which holds constants derived from '{Path.GetFileName(envFile.Path)}'");
+            builder.AppendLine($"    /// An auto-generated class which holds constants derived from '{Path.GetFileName(envFile.Path)}'");
             builder.AppendLine("    /// </summary>");
             builder.AppendLine($"    public static class {className}");
             builder.AppendLine("    {");

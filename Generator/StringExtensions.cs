@@ -284,7 +284,7 @@ namespace DotEnvGenerator
             {
                 value = $"{value}\"";
             }
-            return value;
+            return "@" + value;
         }
         public static string[] CommaSplit(this string value)
         {
