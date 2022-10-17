@@ -1,0 +1,6 @@
+﻿<Project>
+  <ItemGroup>
+      <CompilerVisibleProperty Include="DotEnv_EnableLogging" />
+      <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="EnableLogging" />
+  </ItemGroup>
+</Project>
